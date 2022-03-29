@@ -1,18 +1,23 @@
-train_dataset: nuscenes
+train_dataset: hdmapnet
 # dataroot: ${DATA_ROOT}/nuscenes
 dataroot: /home/user/data/Dataset/nuscenes/v1.0-trainval
 nuscenes_version: v1.0-trainval
-label_root: nuscenes/map_layers_only_v2
+label_root: nuscenes/hdmapnet
 img_size: [800, 600]
-num_class: 6
+num_class: 3
+# 'contour', 'ped_crossing', 'road_divider', 'lane_divider'
 class_weights:
-  -    1.7    # drivable_area
-  -    5.9    # ped_crossing
-  -    3.3    # walkway
+  -    1.0    # road_divider, lane_divider -> line_classes
+  -    1.0    # ped_crossing
+  -    1.0    # road_segment, lane -> contour
+  # -    1.0    # lane_divider
+  # -    1.7    # road_segment
+  # -    5.9    # lane
+  # -    3.3    # ped_crossing
   # -    7.7    # stop_line ### added
-  -    4.6    # carpark_area
-  -    5.1    # road_divider ### added
-  -    4.3    # lane_divider ### added
+  # -    4.6    # road_divider
+  # -    4.3    # lane_divider ### added
+  # -    4.3    # lane_divider ### added
   # -    8.0    # car
   # -   10.3    # truck
   # -   10.6    # bus
@@ -30,9 +35,9 @@ prior:
   - 0.02407   # ped_crossing
   - 0.14491   # walkway
   # - 0.12987   # stop_line ### added
-  - 0.02994   # carpark_area
-  - 0.02694   # road_divider ### added
-  - 0.03124   # lane_divider ### added
+  # - 0.02994   # carpark_area
+  # - 0.02694   # road_divider ### added
+  # - 0.03124   # lane_divider ### added
   # - 0.02086   # car
   # - 0.00477   # truck
   # - 0.00156   # bus

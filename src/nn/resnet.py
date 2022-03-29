@@ -69,13 +69,13 @@ class BasicBlock(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, dilation=1):
+    def __init__(self, inplanes, planes, stride=1, dilation=1): # 64, 64
         super(Bottleneck, self).__init__()
         self.conv1 = conv1x1(inplanes, planes)
         self.bn1 = nn.GroupNorm(16, planes)
         self.conv2 = conv3x3(planes, planes, stride, dilation)
         self.bn2 = nn.GroupNorm(16, planes)
-        self.conv3 = conv1x1(planes, planes * self.expansion)
+        self.conv3 = conv1x1(planes, planes * self.expansion) # 64*4=256
         self.bn3 = nn.GroupNorm(16, planes * self.expansion)
 
         if stride != 1 or inplanes != planes * self.expansion:
@@ -115,9 +115,9 @@ class ResNetLayer(nn.Sequential):
             raise Exception("Unknown residual block type: " + str(blocktype))
         
         # Construct layers
-        layers = [block(in_channels, channels, stride, dilation)]
+        layers = [block(in_channels, channels, stride, dilation)] # 64 -> 256
         for _ in range(1, num_blocks):
-            layers.append(block(channels * block.expansion, channels, 1, dilation))
+            layers.append(block(channels * block.expansion, channels, 1, dilation)) # 256 -> 256
 
         self.in_channels = in_channels
         self.out_channels = channels * block.expansion

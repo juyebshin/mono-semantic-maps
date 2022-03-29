@@ -94,7 +94,7 @@ prior:
 # Whether to use horizontal flips for data augmentation
 hflip: True
 
-# Top-left and bottom right coordinates of map region, in meters (in image!)
+# Top-left and bottom right coordinates of map region, in meters (in image?)
 map_extents: [-25., 1., 25., 50.]
 
 # Spacing between adjacent grid cells in the map, in meters
@@ -104,7 +104,7 @@ map_resolution: 0.25
 log_interval: 10
 
 # Visualise predictions every N iterations
-vis_interval: 10
+vis_interval: 1
 
 
 ### Model options ###
@@ -141,7 +141,7 @@ topdown:
 num_class: 14
 
 # Whether to use Bayesian classifier
-bayesian: True # for static map_layers_only
+bayesian: True
 
 # Number of samples used for Monte-Carlo inference
 mc_samples: 40

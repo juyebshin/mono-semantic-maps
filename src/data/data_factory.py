@@ -10,6 +10,8 @@ from argoverse.data_loading.argoverse_tracking_loader import ArgoverseTrackingLo
 from .argoverse.dataset import ArgoverseMapDataset
 from .argoverse.splits import TRAIN_LOGS, VAL_LOGS
 
+from .hdmapnet.dataset import HDMapNetSemanticDataset
+
 
 def build_nuscenes_datasets(config):
     print('==> Loading NuScenes dataset...')
@@ -46,12 +48,35 @@ def build_argoverse_datasets(config):
                                    config.img_size, VAL_LOGS)
     return train_data, val_data
 
+def build_hdmapnet_datasets(config):
+    print('==> Loading HDMapNet dataset...')
+    
+    # Exclude calibration scenes
+    if config.hold_out_calibration:
+        train_scenes = list(set(TRAIN_SCENES) - set(CALIBRATION_SCENES))
+    else:
+        train_scenes = TRAIN_SCENES
+
+    train_data = HDMapNetSemanticDataset(config.nuscenes_version, 
+                                         os.path.expandvars(config.dataroot),
+                                         config.map_extents, config.map_resolution,
+                                         config.img_size, train_scenes)
+                                         
+    val_data = HDMapNetSemanticDataset(config.nuscenes_version, 
+                                         os.path.expandvars(config.dataroot),
+                                         config.map_extents, config.map_resolution,
+                                         config.img_size, VAL_SCENES)
+
+    return train_data, val_data
+
 
 def build_datasets(dataset_name, config):
     if dataset_name == 'nuscenes':
         return build_nuscenes_datasets(config)
     elif dataset_name == 'argoverse':
         return build_argoverse_datasets(config)
+    elif dataset_name == 'hdmapnet':
+        return build_hdmapnet_datasets(config)
     else:
         raise ValueError(f"Unknown dataset option '{dataset_name}'")
 

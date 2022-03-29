@@ -4,6 +4,8 @@ from datetime import datetime
 from argparse import ArgumentParser
 from tqdm import tqdm
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 from torch.optim import SGD
@@ -15,8 +17,9 @@ from src.data.data_factory import build_dataloaders
 from src.utils.configs import get_default_configuration, load_config
 from src.utils.confusion import BinaryConfusionMatrix
 from src.data.nuscenes.utils import NUSCENES_CLASS_NAMES
+from src.data.nuscenes.utils import STATIC_CLASSES, HDMAPNET_CLASSES
 from src.data.argoverse.utils import ARGOVERSE_CLASS_NAMES
-from src.utils.visualise import colorise
+from src.utils.visualise import colorise, hdmapnet_color
 
 def train(dataloader, model, criterion, optimiser, summary, config, epoch):
 
@@ -123,15 +126,28 @@ def evaluate(dataloader, model, criterion, summary, config, epoch):
 
 def visualise(summary, image, scores, labels, mask, step, dataset, split):
 
-    class_names = NUSCENES_CLASS_NAMES if dataset == 'nuscenes' \
-        else ARGOVERSE_CLASS_NAMES
+    class_names = STATIC_CLASSES if dataset == 'nuscenes' \
+        else HDMAPNET_CLASSES
 
     summary.add_image(split + '/image', image[0], step, dataformats='CHW')
     summary.add_image(split + '/pred', colorise(scores[0], 'coolwarm', 0, 1),
                       step, dataformats='NHWC')
     summary.add_image(split + '/gt', colorise(labels[0], 'coolwarm', 0, 1),
                       step, dataformats='NHWC')
+    summary.add_image(split + '/mask', colorise(mask[0], 'coolwarm', 0, 1),
+                      step, dataformats='HWC')
 
+    thres = scores[0] > 0.5
+    # score[thres] = 0.0
+    thres = thres.cpu().data.numpy() # (4, 200, 200)
+    out_img = np.zeros((thres.shape[1], thres.shape[2], 3), dtype='uint8') # rgb
+    gt_img = np.zeros((thres.shape[1], thres.shape[2], 3), dtype='uint8') # rgb
+    for i, (class_name, color) in enumerate(hdmapnet_color.items()):
+        if class_name in class_names:
+            out_img[thres[i]] = color # thres[i] & ?? ~mask[idx].cpu().data.numpy() & 
+            gt_img[labels[0, i].cpu().data.numpy().astype(np.bool)] = color
+    summary.add_image(split + '/gt_color', gt_img, step, dataformats='HWC')
+    summary.add_image(split + '/pred_color', out_img, step, dataformats='HWC')
     
     # for i, name in enumerate(class_names):
     #     summary.add_image(split + '/pred/' + name, scores[0, i], step, 
@@ -145,8 +161,8 @@ def visualise(summary, image, scores, labels, mask, step, dataset, split):
 def display_results(confusion, dataset):
 
     # Display confusion matrix summary
-    class_names = NUSCENES_CLASS_NAMES if dataset == 'nuscenes' \
-        else ARGOVERSE_CLASS_NAMES
+    class_names = STATIC_CLASSES if dataset == 'nuscenes' \
+        else HDMAPNET_CLASSES
     
     print('\nResults:')
     for name, iou_score in zip(class_names, confusion.iou):
@@ -158,8 +174,8 @@ def display_results(confusion, dataset):
 def log_results(confusion, dataset, summary, split, epoch):
 
     # Display and record epoch IoU scores
-    class_names = NUSCENES_CLASS_NAMES if dataset == 'nuscenes' \
-        else ARGOVERSE_CLASS_NAMES
+    class_names = STATIC_CLASSES if dataset == 'nuscenes' \
+        else HDMAPNET_CLASSES
 
     for name, iou_score in zip(class_names, confusion.iou):
         summary.add_scalar(f'{split}/iou/{name}', iou_score, epoch)
@@ -262,10 +278,10 @@ def create_experiment(config, tag, resume=None):
 def main():
 
     parser = ArgumentParser()
-    parser.add_argument('--tag', type=str, default='run',
+    parser.add_argument('--tag', type=str, default='hdmapnet_test',
                         help='optional tag to identify the run')
-    parser.add_argument('--dataset', choices=['nuscenes', 'argoverse'],
-                        default='nuscenes', help='dataset to train on')
+    parser.add_argument('--dataset', choices=['nuscenes', 'hdmapnet'], # argoverse
+                        default='hdmapnet', help='dataset to train on')
     parser.add_argument('--model', choices=['pyramid', 'vpn', 'ved'],
                         default='pyramid', help='model to train')
     parser.add_argument('--experiment', default='test', 

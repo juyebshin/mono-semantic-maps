@@ -12,7 +12,7 @@ from .resnet import ResNetLayer
 
 
 class FPN(nn.Module):
-    def __init__(self, num_blocks):
+    def __init__(self, num_blocks): # FPN50: num_blocks=[3,4,6,3]
         super(FPN, self).__init__()
         self.in_planes = 64
 
@@ -25,8 +25,8 @@ class FPN(nn.Module):
         self.layer2 = ResNetLayer(256, 128, num_blocks[1], stride=2)
         self.layer3 = ResNetLayer(512, 256, num_blocks[2], stride=2)
         self.layer4 = ResNetLayer(1024, 512, num_blocks[3], stride=2)
-        self.conv6 = nn.Conv2d(2048, 256, kernel_size=3, stride=2, padding=1)
-        self.conv7 = nn.Conv2d( 256, 256, kernel_size=3, stride=2, padding=1)
+        self.conv6 = nn.Conv2d(2048, 256, kernel_size=3, stride=2, padding=1) # out_dim=in_dim/2
+        self.conv7 = nn.Conv2d( 256, 256, kernel_size=3, stride=2, padding=1) # out_dim=in_dim/2
 
         # Lateral layers
         self.latlayer1 = nn.Conv2d(2048, 256, kernel_size=1, stride=1, padding=0)
@@ -34,8 +34,8 @@ class FPN(nn.Module):
         self.latlayer3 = nn.Conv2d( 512, 256, kernel_size=1, stride=1, padding=0)
 
         # Top-down layers
-        self.toplayer1 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
-        self.toplayer2 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
+        self.toplayer1 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1) # out_dim=in_dim
+        self.toplayer2 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1) # out_dim=in_dim
 
         # ImageNet normalization parameters
         self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]))
@@ -79,23 +79,23 @@ class FPN(nn.Module):
     def forward(self, x):
 
         # Normalize image
-        x = (x - self.mean.view(-1, 1, 1)) / self.std.view(-1, 1, 1)
+        x = (x - self.mean.view(-1, 1, 1)) / self.std.view(-1, 1, 1) # dim
 
         # Bottom-up
         c1 = F.relu(self.bn1(self.conv1(x)))
-        c1 = F.max_pool2d(c1, kernel_size=3, stride=2, padding=1)
-        c2 = self.layer1(c1)
-        c3 = self.layer2(c2)
-        c4 = self.layer3(c3)
-        c5 = self.layer4(c4)
-        p6 = self.conv6(c5)
-        p7 = self.conv7(F.relu(p6))
+        c1 = F.max_pool2d(c1, kernel_size=3, stride=2, padding=1) # dim/4
+        c2 = self.layer1(c1) # dim/4
+        c3 = self.layer2(c2) # dim/8
+        c4 = self.layer3(c3) # dim/16
+        c5 = self.layer4(c4) # dim/32
+        p6 = self.conv6(c5) # dim/64
+        p7 = self.conv7(F.relu(p6)) # dim/128
         # Top-down
-        p5 = self.latlayer1(c5)
-        p4 = self._upsample_add(p5, self.latlayer2(c4))
-        p4 = self.toplayer1(p4)
-        p3 = self._upsample_add(p4, self.latlayer3(c3))
-        p3 = self.toplayer2(p3)
+        p5 = self.latlayer1(c5) # /32
+        p4 = self._upsample_add(p5, self.latlayer2(c4)) # /16
+        p4 = self.toplayer1(p4) # /16 (conv1x1)
+        p3 = self._upsample_add(p4, self.latlayer3(c3)) # /8
+        p3 = self.toplayer2(p3) # /8 (conv1x1)
         return p3, p4, p5, p6, p7
 
 

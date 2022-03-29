@@ -49,7 +49,7 @@ def build_criterion(model_name, config):
         criterion = FocalLossCriterion(config.focal.alpha, config.focal.gamma)
     elif config.loss_fn == 'prior':
         criterion = PriorOffsetCriterion(config.prior)
-    else:
+    else: # bce
         criterion = OccupancyCriterion(config.prior, config.xent_weight, 
                                        config.uncert_weight, config.weight_mode)
     
@@ -66,7 +66,7 @@ def build_pyramid_occupancy_network(config):
     frontend = FPN50()
 
     # Build transformer pyramid
-    tfm_resolution = config.map_resolution * reduce(mul, config.topdown.strides)
+    tfm_resolution = config.map_resolution * reduce(mul, config.topdown.strides) # 0.25 * (1 * 2)
     transformer = TransformerPyramid(256, config.tfm_channels, tfm_resolution,
                                      config.map_extents, config.ymin, 
                                      config.ymax, config.focal_length)

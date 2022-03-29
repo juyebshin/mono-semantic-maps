@@ -9,6 +9,9 @@ class DenseTransformer(nn.Module):
 
     def __init__(self, in_channels, channels, resolution, grid_extents, 
                  ymin, ymax, focal_length, groups=1):
+                 # in_channels=256, channels=64, resolution=0.5, 
+                 # ymin=-2, ymin=4, focal_length: [78.75, 39.375, 19.6875, ],
+                 # grid_extents: [-25, 39, 25, 50], [-25, 19.5, 25, 39], [-25, 9.5, 25, 19.5], [-25, 4.5, 25, 9.5], [-25, 1, 25, 4.5]
         super().__init__()
 
         # Initial convolution to reduce feature dimensions
@@ -20,7 +23,7 @@ class DenseTransformer(nn.Module):
 
         # Compute input height based on region of image covered by grid
         self.zmin, zmax = grid_extents[1], grid_extents[3]
-        self.in_height = math.ceil(focal_length * (ymax - ymin) / self.zmin)
+        self.in_height = math.ceil(focal_length * (ymax - ymin) / self.zmin) # 13 for all feature maps
         self.ymid = (ymin + ymax) / 2
 
         # Compute number of output cells required
@@ -29,7 +32,7 @@ class DenseTransformer(nn.Module):
         # Dense layer which maps UV features to UZ
         self.fc = nn.Conv1d(
             channels * self.in_height, channels * self.out_depth, 1, groups=groups
-        )
+        ) # 
         self.out_channels = channels
     
 
@@ -43,9 +46,9 @@ class DenseTransformer(nn.Module):
         features = F.relu(self.bn(self.conv(features)))
 
         # Flatten height and channel dimensions
-        B, C, _, W = features.shape
-        flat_feats = features.flatten(1, 2)
-        bev_feats = self.fc(flat_feats).view(B, C, -1, W)
+        B, C, _, W = features.shape # [batch, channel=64, in_height, width]
+        flat_feats = features.flatten(1, 2) # flaten in channel and height: [batch, channel*in_height, width]
+        bev_feats = self.fc(flat_feats).view(B, C, -1, W) # [batch, (channel=64)*out_depth, width] -> [batch, channel=64, out_depth, width]
 
         # Resample to orthographic grid
         return self.resampler(bev_feats, calib)

@@ -17,6 +17,10 @@ def load_config(config_path):
 def get_default_configuration():
     defaults_path = os.path.join(ROOT, 'configs/defaults.yml')
     return load_config(defaults_path)
+
+def get_eval_configuration():
+    defaults_path = os.path.join(ROOT, 'configs/eval.yml')
+    return load_config(defaults_path)
     
 
 
