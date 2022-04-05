@@ -119,6 +119,7 @@ def preprocess_map(vectors, extents, patch_size, canvas_size, max_channel, thick
     instance_masks = []
     forward_masks = [] # vector direction forward
     backward_masks = [] # vector direction forward
+    distance_masks = []
     for i in range(max_channel): # max_channel=3, 0: line_classes, 1: ped_crossing, 2: boundary_classes
         # idx: instance index
         map_mask, idx = line_geom_to_mask(vector_num_list[i], confidence_levels, extents, canvas_size, thickness, idx)
@@ -129,19 +130,23 @@ def preprocess_map(vectors, extents, patch_size, canvas_size, max_channel, thick
         forward_masks.append(forward_mask)
         backward_mask, _ = line_geom_to_mask(vector_num_list[i], confidence_levels, extents, canvas_size, thickness, 1, type='backward', angle_class=angle_class)
         backward_masks.append(backward_mask)
+        distance_mask, _ = line_geom_to_mask(vector_num_list[i], confidence_levels, extents, canvas_size, 1, 1)
+        distance_masks.append(distance_mask)
 
     filter_masks = np.stack(filter_masks) # (3, 200, 400)
     instance_masks = np.stack(instance_masks) # (3, 200, 400)
     forward_masks = np.stack(forward_masks)
     backward_masks = np.stack(backward_masks)
+    distance_masks = np.stack(distance_masks)
 
     instance_masks = overlap_filter(instance_masks, filter_masks)
     forward_masks = overlap_filter(forward_masks, filter_masks).sum(0).astype('int32')
     backward_masks = overlap_filter(backward_masks, filter_masks).sum(0).astype('int32')
 
     semantic_masks = instance_masks != 0
+    distance_masks = distance_masks != 0
 
-    return semantic_masks, instance_masks, forward_masks, backward_masks
+    return semantic_masks, instance_masks, forward_masks, backward_masks, distance_masks
 
 
 def rasterize_map(vectors, patch_size, canvas_size, max_channel, thickness):

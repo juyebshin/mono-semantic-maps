@@ -21,133 +21,121 @@ from src.data.nuscenes.utils import STATIC_CLASSES, HDMAPNET_CLASSES
 from src.data.argoverse.utils import ARGOVERSE_CLASS_NAMES
 from src.utils.visualise import colorise, hdmapnet_color
 
-def train(dataloader, model, criterion, optimiser, summary, config, epoch):
+# def train(dataloader, model, criterion, optimiser, summary, config, epoch):
 
-    model.train()
+#     model.train()
 
-    # Compute prior probability of occupancy
-    prior = torch.tensor(config.prior)
-    prior_log_odds = torch.log(prior / (1 - prior))
+#     # Compute prior probability of occupancy
+#     prior = torch.tensor(config.prior)
+#     prior_log_odds = torch.log(prior / (1 - prior))
 
-    # Initialise confusion matrix
-    confusion = BinaryConfusionMatrix(config.num_class)
+#     # Initialise confusion matrix
+#     confusion = BinaryConfusionMatrix(config.num_class)
     
-    # Iterate over dataloader
-    iteration = (epoch - 1) * len(dataloader)
-    for i, batch in enumerate(tqdm(dataloader)):
+#     # Iterate over dataloader
+#     iteration = (epoch - 1) * len(dataloader)
+#     for i, batch in enumerate(tqdm(dataloader)):
 
-        # Move tensors to GPU
-        if len(config.gpus) > 0:
-            batch = [t.cuda() for t in batch]
+#         # Move tensors to GPU
+#         if len(config.gpus) > 0:
+#             batch = [t.cuda() for t in batch]
         
-        # Predict class occupancy scores and compute loss
-        image, calib, labels, mask = batch
-        if config.model == 'ved':
-            logits, mu, logvar = model(image)
-            loss = criterion(logits, labels, mask, mu, logvar)
-        else:
-            logits = model(image, calib)
-            loss = criterion(logits, labels, mask)
+#         # Predict class occupancy scores and compute loss
+#         image, calib, labels, mask = batch
+#         if config.model == 'ved':
+#             logits, mu, logvar = model(image)
+#             loss = criterion(logits, labels, mask, mu, logvar)
+#         else:
+#             logits = model(image, calib)
+#             loss = criterion(logits, labels, mask)
 
 
-        # Compute gradients and update parameters
-        optimiser.zero_grad()
-        loss.backward()
-        optimiser.step()
+#         # Compute gradients and update parameters
+#         optimiser.zero_grad()
+#         loss.backward()
+#         optimiser.step()
 
-        # Update confusion matrix
-        scores = logits.cpu().sigmoid()  
-        confusion.update(scores > config.score_thresh, labels, mask)
+#         # Update confusion matrix
+#         scores = logits.cpu().sigmoid()  
+#         confusion.update(scores > config.score_thresh, labels, mask)
 
-        # Update tensorboard
-        if i % config.log_interval == 0:
-            summary.add_scalar('train/loss', float(loss), iteration)
+#         # Update tensorboard
+#         if i % config.log_interval == 0:
+#             summary.add_scalar('train/loss', float(loss), iteration)
 
-        # Visualise
-        if i % config.vis_interval == 0:
-            visualise(summary, image, scores, labels, mask, iteration, 
-                      config.train_dataset, split='train')
+#         # Visualise
+#         if i % config.vis_interval == 0:
+#             visualise(summary, image, scores, labels, mask, iteration, 
+#                       config.train_dataset, split='train')
                 
-        iteration += 1
+#         iteration += 1
 
-    # Print and record results
-    display_results(confusion, config.train_dataset)
-    log_results(confusion, config.train_dataset, summary, 'train', epoch)
+#     # Print and record results
+#     display_results(confusion, config.train_dataset)
+#     log_results(confusion, config.train_dataset, summary, 'train', epoch)
 
 
 
-def evaluate(dataloader, model, criterion, summary, config, epoch):
+# def evaluate(dataloader, model, criterion, summary, config, epoch):
 
-    model.eval()
+#     model.eval()
 
-    # Compute prior probability of occupancy
-    prior = torch.tensor(config.prior)
-    prior_log_odds = torch.log(prior / (1 - prior))
+#     # Compute prior probability of occupancy
+#     prior = torch.tensor(config.prior)
+#     prior_log_odds = torch.log(prior / (1 - prior))
 
-    # Initialise confusion matrix
-    confusion = BinaryConfusionMatrix(config.num_class)
+#     # Initialise confusion matrix
+#     confusion = BinaryConfusionMatrix(config.num_class)
     
-    # Iterate over dataset
-    for i, batch in enumerate(tqdm(dataloader)):
+#     # Iterate over dataset
+#     for i, batch in enumerate(tqdm(dataloader)):
 
-        # Move tensors to GPU
-        if len(config.gpus) > 0:
-            batch = [t.cuda() for t in batch]
+#         # Move tensors to GPU
+#         if len(config.gpus) > 0:
+#             batch = [t.cuda() for t in batch]
         
-        # Predict class occupancy scores and compute loss
-        image, calib, labels, mask = batch
-        with torch.no_grad():
-            if config.model == 'ved':
-                logits, mu, logvar = model(image)
-                loss = criterion(logits, labels, mask, mu, logvar)
-            else:
-                logits = model(image, calib)
-                loss = criterion(logits, labels, mask)
+#         # Predict class occupancy scores and compute loss
+#         image, calib, labels, mask = batch
+#         with torch.no_grad():
+#             if config.model == 'ved':
+#                 logits, mu, logvar = model(image)
+#                 loss = criterion(logits, labels, mask, mu, logvar)
+#             else:
+#                 logits = model(image, calib)
+#                 loss = criterion(logits, labels, mask)
 
-        # Update confusion matrix
-        scores = logits.cpu().sigmoid()  
-        confusion.update(scores > config.score_thresh, labels, mask)
+#         # Update confusion matrix
+#         scores = logits.cpu().sigmoid()  
+#         confusion.update(scores > config.score_thresh, labels, mask)
 
-        # Update tensorboard
-        if i % config.log_interval == 0:
-            summary.add_scalar('val/loss', float(loss), epoch)
+#         # Update tensorboard
+#         if i % config.log_interval == 0:
+#             summary.add_scalar('val/loss', float(loss), epoch)
         
-        # Visualise
-        if i % config.vis_interval == 0:
-            visualise(summary, image, scores, labels, mask, epoch, 
-                      config.train_dataset, split='val')
+#         # Visualise
+#         if i % config.vis_interval == 0:
+#             visualise(summary, image, scores, labels, mask, epoch, 
+#                       config.train_dataset, split='val')
 
-    # Print and record results
-    display_results(confusion, config.train_dataset)
-    log_results(confusion, config.train_dataset, summary, 'val', epoch)
+#     # Print and record results
+#     display_results(confusion, config.train_dataset)
+#     log_results(confusion, config.train_dataset, summary, 'val', epoch)
 
-    return confusion.mean_iou
+#     return confusion.mean_iou
 
 
-def visualise(summary, image, scores, labels, mask, step, dataset, split):
+def visualise(summary, image, labels, mask, distances, step, dataset, split):
 
     class_names = STATIC_CLASSES if dataset == 'nuscenes' \
         else HDMAPNET_CLASSES
 
     summary.add_image(split + '/image', image[0], step, dataformats='CHW')
-    summary.add_image(split + '/pred', colorise(scores[0], 'coolwarm', 0, 1),
-                      step, dataformats='NHWC')
     summary.add_image(split + '/gt', colorise(labels[0], 'coolwarm', 0, 1),
                       step, dataformats='NHWC')
     summary.add_image(split + '/mask', colorise(mask[0], 'coolwarm', 0, 1),
                       step, dataformats='HWC')
-
-    thres = scores[0] > 0.5
-    # score[thres] = 0.0
-    thres = thres.cpu().data.numpy() # (4, 200, 200)
-    out_img = np.zeros((thres.shape[1], thres.shape[2], 3), dtype='uint8') # rgb
-    gt_img = np.zeros((thres.shape[1], thres.shape[2], 3), dtype='uint8') # rgb
-    for i, (class_name, color) in enumerate(hdmapnet_color.items()):
-        if class_name in class_names:
-            out_img[thres[i]] = color # thres[i] & ?? ~mask[idx].cpu().data.numpy() & 
-            gt_img[labels[0, i].cpu().data.numpy().astype(np.bool)] = color
-    summary.add_image(split + '/gt_color', gt_img, step, dataformats='HWC')
-    summary.add_image(split + '/pred_color', out_img, step, dataformats='HWC')
+    summary.add_image(split + '/distance', colorise(distances[0], 'magma'),
+                      step, dataformats='NHWC')
     
     # for i, name in enumerate(class_names):
     #     summary.add_image(split + '/pred/' + name, scores[0, i], step, 
@@ -255,9 +243,10 @@ def create_experiment(config, tag, resume=None):
     else:
         # Otherwise, generate a run directory based on the current time
         name = datetime.now().strftime('{}_%y-%m-%d--%H-%M-%S').format(tag)
-        logdir = os.path.join(os.path.expandvars(config.logdir), name)
+        logdir = os.path.join(os.path.expandvars(config.logdir), tag)
         print("\n==> Creating new experiment in directory:\n" + logdir)
-        os.makedirs(logdir)
+        if not os.path.exists(logdir):
+            os.makedirs(logdir)
     
     # Display the config options on-screen
     print(config.dump())
@@ -278,7 +267,7 @@ def create_experiment(config, tag, resume=None):
 def main():
 
     parser = ArgumentParser()
-    parser.add_argument('--tag', type=str, default='hdmapnet_v2_3gpus',
+    parser.add_argument('--tag', type=str, default='distance_test',
                         help='optional tag to identify the run')
     parser.add_argument('--dataset', choices=['nuscenes', 'hdmapnet'], # argoverse
                         default='hdmapnet', help='dataset to train on')
@@ -288,7 +277,7 @@ def main():
                         help='name of experiment config to load')
     parser.add_argument('--resume', default=None, 
                         help='path to an experiment to resume')
-    parser.add_argument('--options', nargs='*', default=[],
+    parser.add_argument('--options', nargs='*', default=['batch_size', 3, 'hflip', False, 'vis_interval', 10],
                         help='list of addition config options as key-val pairs')
     args = parser.parse_args()
 
@@ -306,49 +295,22 @@ def main():
         torch.cuda.set_device(config.gpus[0])
 
     # Setup experiment
-    model = build_model(config.model, config)
-    criterion = build_criterion(config.model, config)
     train_loader, val_loader = build_dataloaders(config.train_dataset, config)
 
-    # Build optimiser and learning rate scheduler
-    optimiser = SGD(model.parameters(), config.learning_rate, 
-                    weight_decay=config.weight_decay)
-    lr_scheduler = MultiStepLR(optimiser, config.lr_milestones, 0.1)
-
-    # Load checkpoint
-    if args.resume:
-        epoch, best_iou = load_checkpoint(os.path.join(logdir, 'latest.pth'),
-                                          model, optimiser, lr_scheduler)
-    else:
-        epoch, best_iou = 1, 0
-
-    # Main training loop
-    while epoch <= config.num_epochs:
+    for i, batch in enumerate(tqdm(train_loader)):
         
-        print('\n\n=== Beginning epoch {} of {} ==='.format(epoch, 
-                                                            config.num_epochs))
+        # Move tensors to GPU
+        if len(config.gpus) > 0:
+            batch = [t.cuda() for t in batch]
         
-        # Train model for one epoch
-        train(train_loader, model, criterion, optimiser, summary, config, epoch)
+        # Predict class occupancy scores and compute loss
+        image, calib, labels, mask, distances = batch
 
-        # Evaluate on the validation set
-        val_iou = evaluate(val_loader, model, criterion, summary, config, epoch)
-
-        # Update learning rate
-        lr_scheduler.step()
-
-        # Save checkpoints
-        if val_iou > best_iou:
-            best_iou = val_iou
-            save_checkpoint(os.path.join(logdir, 'best.pth'), model, 
-                            optimiser, lr_scheduler, epoch, best_iou)
-        
-        save_checkpoint(os.path.join(logdir, 'latest.pth'), model, optimiser, 
-                        lr_scheduler, epoch, best_iou)
-        
-        epoch += 1
+        if i % config.vis_interval == 0:
+            visualise(summary, image, labels, mask, distances, i, 
+                      config.train_dataset, split='vis')
     
-    print("\nTraining complete!")
+    print("\nVisualization complete!")
 
 
 

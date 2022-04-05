@@ -41,7 +41,7 @@ def train(dataloader, model, criterion, optimiser, summary, config, epoch):
             batch = [t.cuda() for t in batch]
         
         # Predict class occupancy scores and compute loss
-        image, calib, labels, mask = batch
+        image, calib, labels, mask, dist = batch
         if config.model == 'ved':
             logits, mu, logvar = model(image)
             loss = criterion(logits, labels, mask, mu, logvar)
@@ -56,7 +56,7 @@ def train(dataloader, model, criterion, optimiser, summary, config, epoch):
         optimiser.step()
 
         # Update confusion matrix
-        scores = logits.cpu().sigmoid()  
+        scores = logits.cpu().sigmoid()
         confusion.update(scores > config.score_thresh, labels, mask)
 
         # Update tensorboard
@@ -65,7 +65,7 @@ def train(dataloader, model, criterion, optimiser, summary, config, epoch):
 
         # Visualise
         if i % config.vis_interval == 0:
-            visualise(summary, image, scores, labels, mask, iteration, 
+            visualise(summary, image, scores, labels, mask, dist, iteration, 
                       config.train_dataset, split='train')
                 
         iteration += 1
@@ -95,7 +95,7 @@ def evaluate(dataloader, model, criterion, summary, config, epoch):
             batch = [t.cuda() for t in batch]
         
         # Predict class occupancy scores and compute loss
-        image, calib, labels, mask = batch
+        image, calib, labels, mask, dist = batch
         with torch.no_grad():
             if config.model == 'ved':
                 logits, mu, logvar = model(image)
@@ -114,7 +114,7 @@ def evaluate(dataloader, model, criterion, summary, config, epoch):
         
         # Visualise
         if i % config.vis_interval == 0:
-            visualise(summary, image, scores, labels, mask, epoch, 
+            visualise(summary, image, scores, labels, mask, dist, epoch, 
                       config.train_dataset, split='val')
 
     # Print and record results
@@ -124,7 +124,7 @@ def evaluate(dataloader, model, criterion, summary, config, epoch):
     return confusion.mean_iou
 
 
-def visualise(summary, image, scores, labels, mask, step, dataset, split):
+def visualise(summary, image, scores, labels, mask, distances, step, dataset, split):
 
     class_names = STATIC_CLASSES if dataset == 'nuscenes' \
         else HDMAPNET_CLASSES
@@ -136,6 +136,8 @@ def visualise(summary, image, scores, labels, mask, step, dataset, split):
                       step, dataformats='NHWC')
     summary.add_image(split + '/mask', colorise(mask[0], 'coolwarm', 0, 1),
                       step, dataformats='HWC')
+    summary.add_image(split + '/distance', colorise(distances[0], 'magma'),
+                      step, dataformats='NHWC')
 
     thres = scores[0] > 0.5
     # score[thres] = 0.0
@@ -278,7 +280,7 @@ def create_experiment(config, tag, resume=None):
 def main():
 
     parser = ArgumentParser()
-    parser.add_argument('--tag', type=str, default='hdmapnet_v2_3gpus',
+    parser.add_argument('--tag', type=str, default='dt_learn_test',
                         help='optional tag to identify the run')
     parser.add_argument('--dataset', choices=['nuscenes', 'hdmapnet'], # argoverse
                         default='hdmapnet', help='dataset to train on')

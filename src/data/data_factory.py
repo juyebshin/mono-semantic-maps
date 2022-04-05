@@ -88,7 +88,7 @@ def build_trainval_datasets(dataset_name, config):
     train_data, val_data = build_datasets(dataset_name, config)
 
     # Add data augmentation to train dataset
-    train_data = AugmentedMapDataset(train_data, config.hflip)
+    train_data = AugmentedMapDataset(train_data, config.hflip, dataset_name)
 
     return train_data, val_data
 

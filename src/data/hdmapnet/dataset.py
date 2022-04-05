@@ -10,13 +10,11 @@ from torch.utils.data import Dataset
 from torchvision.transforms.functional import to_tensor
 
 import src.data.nuscenes.utils as nusc_utils
-from src.data.utils import get_visible_mask, get_occlusion_mask, transform
+from src.data.utils import get_visible_mask, get_occlusion_mask, transform, get_distance_transform
 
 from .rasterize import preprocess_map
 from .vector_map import VectorizedLocalMap
 from ..nuscenes.utils import CAMERA_NAMES, HDMAPNET_CLASSES, NUSCENES_CLASS_NAMES, get_sensor_transform, iterate_samples, STATIC_CLASSES
-
-CAMS = ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT','CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT']
 
 
 class HDMapNetDataset(Dataset):
@@ -69,40 +67,70 @@ class HDMapNetDataset(Dataset):
     def __len__(self):
         return len(self.tokens)
 
-    def get_imgs(self, rec):
-        imgs = []
-        trans = []
-        rots = []
-        intrins = []
-        for cam in CAMS:
-            samp = self.nusc.get('sample_data', rec['data'][cam])
-            imgname = os.path.join(self.nusc.dataroot, samp['filename'])
-            img = Image.open(imgname)
-            imgs.append(img)
+    # def get_imgs(self, rec):
+    #     imgs = []
+    #     trans = []
+    #     rots = []
+    #     intrins = []
+    #     for cam in CAMERA_NAMES:
+    #         samp = self.nusc.get('sample_data', rec['data'][cam])
+    #         imgname = os.path.join(self.nusc.dataroot, samp['filename'])
+    #         img = Image.open(imgname)
+    #         imgs.append(img)
 
-            sens = self.nusc.get('calibrated_sensor', samp['calibrated_sensor_token'])
-            trans.append(torch.Tensor(sens['translation']))
-            rots.append(torch.Tensor(Quaternion(sens['rotation']).rotation_matrix))
-            intrins.append(torch.Tensor(sens['camera_intrinsic']))
-        return imgs, trans, rots, intrins
+    #         sens = self.nusc.get('calibrated_sensor', samp['calibrated_sensor_token'])
+    #         trans.append(torch.Tensor(sens['translation']))
+    #         rots.append(torch.Tensor(Quaternion(sens['rotation']).rotation_matrix))
+    #         intrins.append(torch.Tensor(sens['camera_intrinsic']))
+    #     return imgs, trans, rots, intrins
 
     def __getitem__(self, idx):
         token = self.tokens[idx]
 
-        # map location in 
-        location = self.nusc.get('log', self.nusc.get('scene', rec['scene_token'])['log_token'])['location']
-        # rec['data']: sample_data
-        ego_pose = self.nusc.get('ego_pose', self.nusc.get('sample_data', token)['ego_pose_token'])
-        vectors = self.vector_map.gen_vectorized_samples(location, ego_pose['translation'], ego_pose['rotation'])
+        sample_data = self.nusc.get('sample_data', token) # camera token
 
+        image = self.load_image(token)
+        calib = self.load_calib(token)
+        # map location in ['boston-seaport', 'singapore-onenorth', 
+        # 'singapore-queenstown','singapore-hollandvillage']
+        location = self.nusc.get( 'log', 
+                                  self.nusc.get( 'scene', 
+                                                 self.nusc.get( 'sample',
+                                                                sample_data['sample_token'] )['scene_token'] )['log_token'] )['location']
+        # rec: sample, rec['data']: sample_data
+        ego_pose = self.nusc.get('ego_pose', sample_data['ego_pose_token']) # camera pose in map coord
+        # Create a transform from birds-eye-view coordinates to map coordinates
+        tfm = get_sensor_transform(self.nusc, sample_data)[[0, 1, 3]][:, [0, 2, 3]]
+        vectors = self.vector_map.gen_vectorized_samples(tfm, self.map_extents, location, ego_pose['translation'], ego_pose['rotation'])
+        semantic_masks, instance_masks, forward_masks, backward_masks = preprocess_map(vectors, self.map_extents, self.patch_size, self.canvas_size, self.max_channel, self.thickness, self.angle_class)
+        
+        visible_mask = np.expand_dims(np.zeros(semantic_masks.shape[1:3], dtype=np.uint8), axis=0)
+        masks = np.concatenate([semantic_masks, visible_mask], axis=0)
+        sensor = self.nusc.get('calibrated_sensor', 
+                          sample_data['calibrated_sensor_token'])
+        intrinsics = np.array(sensor['camera_intrinsic'])
 
-        rec = self.nusc.sample[idx]
-        location = self.nusc.get('log', self.nusc.get('scene', rec['scene_token'])['log_token'])['location']
-        ego_pose = self.nusc.get('ego_pose', self.nusc.get('sample_data', rec['data']['LIDAR_TOP'])['ego_pose_token'])
-        vectors = self.vector_map.gen_vectorized_samples(location, ego_pose['translation'], ego_pose['rotation'])
-        imgs, trans, rots, intrins = self.get_imgs(rec)
+        masks[-1] |= ~get_visible_mask(intrinsics, sample_data['width'],
+                                       self.map_extents, self.map_resolution)
 
-        return imgs, torch.stack(trans), torch.stack(rots), torch.stack(intrins), vectors
+        
+        sample = self.nusc.get('sample', sample_data['sample_token'])
+        lidar_data = self.nusc.get('sample_data', sample['data']['LIDAR_TOP'])
+        lidar_pcl = nusc_utils.load_point_cloud(self.nusc, lidar_data)
+        
+        # Transform points into world coordinate system
+        lidar_transform = nusc_utils.get_sensor_transform(self.nusc, lidar_data)
+        lidar_pcl = transform(lidar_transform, lidar_pcl)
+        
+        cam_transform = nusc_utils.get_sensor_transform(self.nusc, sample_data)
+        cam_points = transform(np.linalg.inv(cam_transform), lidar_pcl)
+
+        masks[-1] |= get_occlusion_mask(cam_points, self.map_extents,
+                                    self.map_resolution)
+
+        labels, mask = masks[:-1].astype(np.bool), ~(masks[-1].astype(np.bool))
+        
+        return image, calib, torch.tensor(labels, dtype=torch.bool), torch.tensor(mask, dtype=torch.bool)
 
     
     def load_image(self, token):
@@ -155,13 +183,15 @@ class HDMapNetSemanticDataset(HDMapNetDataset):
                                                  self.nusc.get( 'sample',
                                                                 sample_data['sample_token'] )['scene_token'] )['log_token'] )['location']
         # rec: sample, rec['data']: sample_data
-        # ego_pose = self.nusc.get('ego_pose', self.nusc.get('sample_data', rec['data']['LIDAR_TOP'])['ego_pose_token'])
         ego_pose = self.nusc.get('ego_pose', sample_data['ego_pose_token']) # camera pose in map coord
         # Create a transform from birds-eye-view coordinates to map coordinates
         tfm = get_sensor_transform(self.nusc, sample_data)[[0, 1, 3]][:, [0, 2, 3]]
-        inv_tfm = np.linalg.inv(tfm)
         vectors = self.vector_map.gen_vectorized_samples(tfm, self.map_extents, location, ego_pose['translation'], ego_pose['rotation'])
-        semantic_masks, instance_masks, forward_masks, backward_masks = preprocess_map(vectors, self.map_extents, self.patch_size, self.canvas_size, self.max_channel, self.thickness, self.angle_class)
+        semantic_masks, instance_masks, forward_masks, backward_masks, distance_masks = preprocess_map(vectors, self.map_extents, self.patch_size, self.canvas_size, self.max_channel, self.thickness, self.angle_class)
+
+        # semantic_masks: (3, 196, 200) np
+        # Create distance transform
+        distance_masks = get_distance_transform(distance_masks, 10.0)
         
         visible_mask = np.expand_dims(np.zeros(semantic_masks.shape[1:3], dtype=np.uint8), axis=0)
         masks = np.concatenate([semantic_masks, visible_mask], axis=0)
@@ -189,20 +219,5 @@ class HDMapNetSemanticDataset(HDMapNetDataset):
 
         labels, mask = masks[:-1].astype(np.bool), ~(masks[-1].astype(np.bool))
         
-        return image, calib, torch.tensor(labels, dtype=torch.bool), torch.tensor(mask, dtype=torch.bool)
+        return image, calib, torch.tensor(labels, dtype=torch.bool), torch.tensor(mask, dtype=torch.bool), torch.tensor(distance_masks, dtype=torch.float32)
 
-
-        # token = self.tokens[idx]
-
-        # image = self.load_image(token)
-        # calib = self.load_calib(token)
-        # rec = self.nusc.sample[idx]
-        # location = self.nusc.get('log', self.nusc.get('scene', rec['scene_token'])['log_token'])['location']
-        # ego_pose = self.nusc.get('ego_pose', self.nusc.get('sample_data', rec['data']['LIDAR_TOP'])['ego_pose_token'])
-        # vectors = self.vector_map.gen_vectorized_samples(location, ego_pose['translation'], ego_pose['rotation'])
-        # semantic_masks, instance_masks, forward_masks, backward_masks = preprocess_map(vectors, self.patch_size, self.canvas_size, self.max_channel, self.thickness, self.angle_class)
-
-        # imgs, trans, rots, intrins = self.get_imgs(rec)
-
-        # return imgs, torch.stack(trans), torch.stack(rots), torch.stack(intrins), torch.Tensor(semantic_masks), \
-        #        torch.Tensor(instance_masks), torch.Tensor(forward_masks), torch.Tensor(backward_masks)

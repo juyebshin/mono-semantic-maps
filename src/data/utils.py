@@ -14,6 +14,19 @@ def encode_binary_labels(masks): # masks: binary
     return (masks.astype(np.int32) * bits.reshape(-1, 1, 1)).sum(0) # (15, 196, 200) * (15, 1, 1)
 
 
+def get_distance_transform(masks, threshold=None):
+    # masks: (3, 196, 200) np bool
+    labels = (~masks).astype('uint8')
+    distances = np.zeros(masks.shape, dtype=np.float32)
+    for i, label in enumerate(labels):
+        distances[i] = cv2.distanceTransform(label, cv2.DIST_L2, maskSize=5)
+        # truncate to [0.0, 10.0] and invert values
+        if threshold is not None:
+            distances[i] = float(threshold) - distances[i]
+            distances[i][distances[i] < 0.0] = 0.0
+        # cv2.normalize(distances[i], distances[i], 0, 1.0, cv2.NORM_MINMAX)
+    return distances
+
 def transform(matrix, vectors):
     vectors = np.dot(matrix[:-1, :-1], vectors.T)
     vectors = vectors.T + matrix[:-1, -1]
@@ -161,9 +174,9 @@ def get_occlusion_mask(points, extents, resolution):
     x1, z1, x2, z2 = extents
 
     # A 'ray' is defined by the ratio between x and z coordinates
-    ray_width = resolution / z2
-    ray_offset = x1 / ray_width
-    max_rays = int((x2 - x1) / ray_width)
+    ray_width = resolution / z2 # 0.25 / 50.0 = 0.005
+    ray_offset = x1 / ray_width # -25 / 0.005 = -5000
+    max_rays = int((x2 - x1) / ray_width) # 50.0 / 0.005 = 10000
 
     # Group LiDAR points into bins
     rayid = np.round(points[:, 0] / points[:, 2] / ray_width - ray_offset)
