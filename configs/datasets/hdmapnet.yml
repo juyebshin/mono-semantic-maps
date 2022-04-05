@@ -31,9 +31,9 @@ class_weights:
 
 # Prior probability of a positive prediction, used to initialise classifier
 prior: 
-  - 0.44679   # drivable_area
+  - 0.14491   # road_divider, lane_divider -> line_classes
   - 0.02407   # ped_crossing
-  - 0.14491   # walkway
+  - 0.44679   # road_segment, lane -> contour
   # - 0.12987   # stop_line ### added
   # - 0.02994   # carpark_area
   # - 0.02694   # road_divider ### added

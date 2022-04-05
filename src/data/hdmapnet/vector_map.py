@@ -56,12 +56,10 @@ class VectorizedLocalMap(object):
     def gen_vectorized_samples(self, tfm, extents, location, ego2global_translation, ego2global_rotation):
         # location: "singapore-onenorth", ...
         x1, z1, x2, z2 = extents
-        center_x = (x1 + x2) / 2.0 # 0
-        center_z = (z1 + z2) / 2.0 # 25.5
         map_pose = ego2global_translation[:2] # x y
         rotation = Quaternion(ego2global_rotation)
 
-        # Get the 2D affine transform from bev coords to map coords 4x4
+        # Get the 2D affine transform from bev coords to map coords, 4x4
         inv_tfm = np.linalg.inv(tfm)
 
         # Create a patch representing the birds-eye-view region in map coordinates
@@ -72,13 +70,6 @@ class VectorizedLocalMap(object):
         # Original
         # patch_box = [x_center, y_center, height, width] -> ego_x + 1.0 + 24.5, ego_y, 49.0, 50.0
         # patch_box = (map_pose[0] + self.patch_size[0]/2., map_pose[1], self.patch_size[0], self.patch_size[1])
-
-        # for PON
-        # patch_box = [x_center, y_center, height, width] -> ego_x + 25.5, ego_y + 0, 50.0, 50.0*2
-        #  + center_z,  + center_x
-        patch_box = (map_pose[0], map_pose[1], self.patch_size[1], z2*2)
-        # yaw
-        patch_angle = quaternion_yaw(rotation) / np.pi * 180
 
         # LineString
         line_geom = self.get_map_geom(map_patch, inv_tfm, self.line_classes, location)
@@ -141,7 +132,6 @@ class VectorizedLocalMap(object):
         map_geom = []
         for layer_name in layer_names:
             if layer_name in self.line_classes: # ['road_divider', 'lane_divider']
-                # geoms = self.map_explorer[location]._get_layer_line(patch_box, patch_angle, layer_name)
                 geoms = []
                 records = getattr(self.nusc_maps[location], layer_name)
                 for record in records:
@@ -151,14 +141,10 @@ class VectorizedLocalMap(object):
 
                     new_line = line.intersection(map_patch)
                     if not new_line.is_empty:
-                        # new_line = affinity.rotate(new_line, -patch_angle, origin=(patch_x, patch_y), use_radians=False)
-                        # new_line = affinity.affine_transform(new_line,
-                        #                                     [1.0, 0.0, 0.0, 1.0, -patch_x, -patch_y])
                         new_line = transform_polygon(new_line, inv_tfm)
                         geoms.append(new_line)
                 map_geom.append((layer_name, geoms))
             elif layer_name in self.polygon_classes: # ['road_segment', 'lane']
-                # geoms = self.map_explorer[location]._get_layer_polygon(patch_box, patch_angle, layer_name)
                 geoms = []
                 records = getattr(self.nusc_maps[location], layer_name)
                 if layer_name == 'drivable_area':
@@ -168,10 +154,6 @@ class VectorizedLocalMap(object):
                         for polygon in polygons:
                             new_polygon = polygon.intersection(map_patch)
                             if not new_polygon.is_empty:
-                                # new_polygon = affinity.rotate(new_polygon, -patch_angle, # origin is (patch_x, patch_y)
-                                #                             origin=(patch_x, patch_y), use_radians=False)
-                                # new_polygon = affinity.affine_transform(new_polygon,
-                                #                                         [1.0, 0.0, 0.0, 1.0, -patch_x, -patch_y])
                                 if new_polygon.geom_type is 'Polygon':
                                     new_polygon = MultiPolygon([new_polygon])
                                 new_polygon = transform_polygon(new_polygon, inv_tfm)
@@ -184,19 +166,13 @@ class VectorizedLocalMap(object):
                         if polygon.is_valid:
                             new_polygon = polygon.intersection(map_patch)
                             if not new_polygon.is_empty:
-                                # new_polygon = affinity.rotate(new_polygon, -patch_angle,
-                                #                             origin=(patch_x, patch_y), use_radians=False)
-                                # new_polygon = affinity.affine_transform(new_polygon,
-                                #                                         [1.0, 0.0, 0.0, 1.0, -patch_x, -patch_y])
                                 if new_polygon.geom_type is 'Polygon':
                                     new_polygon = MultiPolygon([new_polygon])
                                 new_polygon = transform_polygon(new_polygon, inv_tfm)
                                 geoms.append(new_polygon)
                 map_geom.append((layer_name, geoms))
             elif layer_name in self.ped_crossing_classes: # ['ped_crossing']
-                # geoms = self.get_ped_crossing_line(patch_box, patch_angle, location)
                 geoms = self.get_ped_crossing_line(map_patch, inv_tfm, location)
-                # geoms = self.map_explorer[location]._get_layer_polygon(patch_box, patch_angle, layer_name)
                 map_geom.append((layer_name, geoms))
         return map_geom
 
@@ -206,7 +182,7 @@ class VectorizedLocalMap(object):
         for line in line_geom:
             if not line.is_empty:
                 if line.geom_type == 'MultiLineString':
-                    for l in line:
+                    for l in line.geoms:
                         line_vectors.append(self.sample_pts_from_line(l))
                 elif line.geom_type == 'LineString': # road_divider, lane_divider
                     line_vectors.append(self.sample_pts_from_line(line))
@@ -220,15 +196,13 @@ class VectorizedLocalMap(object):
         union_roads = ops.unary_union(roads)
         union_lanes = ops.unary_union(lanes)
         union_segments = ops.unary_union([union_roads, union_lanes])
-        max_x = self.patch_size[1] / 2 # 30 50.0
-        max_y = self.patch_size[0] / 2 # 15 49.0
         x1, z1, x2, z2 = extents # [-25.0, 1.0, 25.0, 50.0]
         local_patch = box(x1 + 0.2, z1 + 0.2, x2 - 0.2, z2 - 0.2)
         exteriors = []
         interiors = []
         if union_segments.geom_type != 'MultiPolygon':
             union_segments = MultiPolygon([union_segments])
-        for poly in union_segments:
+        for poly in union_segments.geoms:
             exteriors.append(poly.exterior)
             for inter in poly.interiors:
                 interiors.append(inter)

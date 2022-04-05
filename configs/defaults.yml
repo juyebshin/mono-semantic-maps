@@ -3,7 +3,7 @@
 ### Training options ###
 
 # IDs of GPUs to use during training
-gpus: [0, 1]
+gpus: [0, 1, 2]
 
 # Number of examples per mini-batch
 batch_size: 12
@@ -104,7 +104,7 @@ map_resolution: 0.25
 log_interval: 10
 
 # Visualise predictions every N iterations
-vis_interval: 10
+vis_interval: 200
 
 
 ### Model options ###
@@ -141,7 +141,7 @@ topdown:
 num_class: 14
 
 # Whether to use Bayesian classifier
-bayesian: True # for static map_layers_only
+bayesian: False # for static map_layers_only
 
 # Number of samples used for Monte-Carlo inference
 mc_samples: 40
