@@ -102,26 +102,27 @@ def visualise(summary, images, scores, labels, masks, distances, step, dataset, 
         gt_img = np.zeros((thres.shape[1], thres.shape[2], 3), dtype='uint8') # rgb
         for i, (class_name, color) in enumerate(map_color.items()):
             if class_name in class_names:
-                out_img[thres[i] & ~mask[i].cpu().data.numpy()] = color # thres[i] & ?? ~mask[idx].cpu().data.numpy() & 
+                out_img[thres[i] & mask.cpu().data.numpy()] = color # thres[i] & ?? ~mask[idx].cpu().data.numpy() &  & (mask[i].cpu().data.numpy().astype(np.bool))
                 gt_img[label[i].cpu().data.numpy().astype(np.bool)] = color
+        # out_img[~mask[idx].cpu().data.numpy()] = (0, 0, 0)
         summary.add_image(split + '/gt_color', gt_img, step + idx, dataformats='HWC')
         summary.add_image(split + '/pred_color', out_img, step + idx, dataformats='HWC')
 
-        # gt_img = np.flipud(gt_img)
-        # out_img = np.flipud(out_img)
-        # file_name = '{}'.format(step + idx).zfill(5)
-        # gt_path = os.path.join(summary.log_dir, 'gt')
-        # if not os.path.exists(gt_path):
-        #     os.mkdir(gt_path)
-        # Image.fromarray(gt_img, mode='RGB').save(os.path.join(gt_path, file_name + '.png'))
-        # pred_path = os.path.join(summary.log_dir, 'pred')
-        # if not os.path.exists(pred_path):
-        #     os.mkdir(pred_path)
-        # Image.fromarray(out_img, mode='RGB').save(os.path.join(pred_path, file_name + '.png'))
-        # input_path = os.path.join(summary.log_dir, 'image')
-        # if not os.path.exists(input_path):
-        #     os.mkdir(input_path)
-        # transform(image).save(os.path.join(input_path, file_name + '.jpg'))
+        gt_img = np.flipud(gt_img)
+        out_img = np.flipud(out_img)
+        file_name = '{}'.format(step + idx).zfill(5)
+        gt_path = os.path.join(summary.log_dir, 'gt')
+        if not os.path.exists(gt_path):
+            os.mkdir(gt_path)
+        Image.fromarray(gt_img, mode='RGB').save(os.path.join(gt_path, file_name + '.png'))
+        pred_path = os.path.join(summary.log_dir, 'pred')
+        if not os.path.exists(pred_path):
+            os.mkdir(pred_path)
+        Image.fromarray(out_img, mode='RGB').save(os.path.join(pred_path, file_name + '.png'))
+        input_path = os.path.join(summary.log_dir, 'image')
+        if not os.path.exists(input_path):
+            os.mkdir(input_path)
+        transform(image).save(os.path.join(input_path, file_name + '.jpg'))
 
 
     
@@ -236,7 +237,7 @@ def create_experiment(config, tag, resume=None):
 def main():
 
     parser = ArgumentParser()
-    parser.add_argument('--tag', type=str, default='eval_hdmapnet_v2',
+    parser.add_argument('--tag', type=str, default='eval_hdmapnet_v2_mask',
                         help='optional tag to identify the run')
     parser.add_argument('--dataset', choices=['nuscenes', 'hdmapnet'],
                         default='hdmapnet', help='dataset to train on')
