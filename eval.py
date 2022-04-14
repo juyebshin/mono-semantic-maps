@@ -22,7 +22,7 @@ from src.data.data_factory import build_dataloaders
 from src.utils.configs import get_default_configuration, load_config, get_eval_configuration
 from src.utils.confusion import BinaryConfusionMatrix
 from src.data.nuscenes.utils import NUSCENES_CLASS_NAMES
-from src.data.nuscenes.utils import STATIC_CLASSES
+from src.data.nuscenes.utils import STATIC_CLASSES, HDMAPNET_CLASSES
 from src.data.argoverse.utils import ARGOVERSE_CLASS_NAMES
 from src.utils.visualise import colorise, color_map, map_layer_color, hdmapnet_color
 
@@ -45,7 +45,7 @@ def evaluate(dataloader, model, criterion, summary, config):
             batch = [t.cuda() for t in batch]
         
         # Predict class occupancy scores and compute loss
-        image, calib, labels, mask = batch
+        image, calib, labels, mask, dist = batch
         with torch.no_grad():
             if config.model == 'ved':
                 logits, mu, logvar = model(image)
@@ -64,7 +64,7 @@ def evaluate(dataloader, model, criterion, summary, config):
         
         # Visualise
         if i % config.vis_interval == 0:
-            visualise(summary, image, scores, labels, mask, i*config.batch_size, 
+            visualise(summary, image, scores, labels, mask, dist, i*config.batch_size, 
                       config.train_dataset, split='val')
 
     # Print and record results
@@ -74,18 +74,18 @@ def evaluate(dataloader, model, criterion, summary, config):
     return confusion.mean_iou
 
 
-def visualise(summary, images, scores, labels, masks, step, dataset, split):
+def visualise(summary, images, scores, labels, masks, distances, step, dataset, split):
     # mask: FOV, occulusion mask
 
     class_names = STATIC_CLASSES if dataset == 'nuscenes' \
-        else ARGOVERSE_CLASS_NAMES
+        else HDMAPNET_CLASSES
     map_color = map_layer_color if dataset == 'nuscenes' \
         else hdmapnet_color
 
     # summary.add_image(split + '/image', image[0], step, dataformats='CHW')
     # summary.add_image(split + '/pred', colorise(scores[0], 'coolwarm', 0, 1),
     #                   step, dataformats='NHWC')
-    for idx, (image, score, label, mask) in enumerate(zip(images, scores, labels, masks)): # iterate over batch
+    for idx, (image, score, label, mask, dist) in enumerate(zip(images, scores, labels, masks, distances)): # iterate over batch
         summary.add_image(split + '/image', image, step + idx, dataformats='CHW')
         summary.add_image(split + '/pred', colorise(score, 'coolwarm', 0, 1),
                             step + idx, dataformats='NHWC')
@@ -93,6 +93,8 @@ def visualise(summary, images, scores, labels, masks, step, dataset, split):
                             step + idx, dataformats='NHWC')
         summary.add_image(split + '/mask', colorise(mask, 'coolwarm', 0, 1),
                             step + idx, dataformats='HWC')
+        summary.add_image(split + '/distance', colorise(dist, 'magma'),
+                      step, dataformats='NHWC')
         thres = score > 0.5
         # score[thres] = 0.0
         thres = thres.cpu().data.numpy() # (4, 200, 200)
@@ -100,7 +102,7 @@ def visualise(summary, images, scores, labels, masks, step, dataset, split):
         gt_img = np.zeros((thres.shape[1], thres.shape[2], 3), dtype='uint8') # rgb
         for i, (class_name, color) in enumerate(map_color.items()):
             if class_name in class_names:
-                out_img[thres[i] & mask[i].cpu().data.numpy()] = color # thres[i] & ?? ~mask[idx].cpu().data.numpy() & 
+                out_img[thres[i] & ~mask[i].cpu().data.numpy()] = color # thres[i] & ?? ~mask[idx].cpu().data.numpy() & 
                 gt_img[label[i].cpu().data.numpy().astype(np.bool)] = color
         summary.add_image(split + '/gt_color', gt_img, step + idx, dataformats='HWC')
         summary.add_image(split + '/pred_color', out_img, step + idx, dataformats='HWC')
@@ -140,7 +142,7 @@ def display_results(confusion, dataset):
 
     # Display confusion matrix summary
     class_names = STATIC_CLASSES if dataset == 'nuscenes' \
-        else ARGOVERSE_CLASS_NAMES
+        else HDMAPNET_CLASSES
     
     print('\nResults:')
     for name, iou_score in zip(class_names, confusion.iou):
@@ -153,7 +155,7 @@ def log_results(confusion, dataset, summary, split, epoch):
 
     # Display and record epoch IoU scores
     class_names = STATIC_CLASSES if dataset == 'nuscenes' \
-        else ARGOVERSE_CLASS_NAMES
+        else HDMAPNET_CLASSES
 
     for name, iou_score in zip(class_names, confusion.iou):
         summary.add_scalar(f'{split}/iou/{name}', iou_score, epoch)
@@ -234,15 +236,15 @@ def create_experiment(config, tag, resume=None):
 def main():
 
     parser = ArgumentParser()
-    parser.add_argument('--tag', type=str, default='eval_map_v2_save',
+    parser.add_argument('--tag', type=str, default='eval_hdmapnet_v2',
                         help='optional tag to identify the run')
-    parser.add_argument('--dataset', choices=['nuscenes', 'argoverse'],
-                        default='nuscenes', help='dataset to train on')
+    parser.add_argument('--dataset', choices=['nuscenes', 'hdmapnet'],
+                        default='hdmapnet', help='dataset to train on')
     parser.add_argument('--model', choices=['pyramid', 'vpn', 'ved'],
                         default='pyramid', help='model to train')
     parser.add_argument('--experiment', default='test', 
                         help='name of experiment config to load')
-    parser.add_argument('--eval', type=str, default='logs/map_layers_only_v2_22-03-21--13-15-36', 
+    parser.add_argument('--eval', type=str, default='logs/hdmapnet_v2_3gpus_22-03-30--15-38-58', 
                         help='path to an experiment to evaluate')
     # parser.add_argument('--batch_size', type=int, default=1,
     #                     help='batch size 1 for evaluation')

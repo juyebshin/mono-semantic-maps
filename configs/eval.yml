@@ -141,7 +141,7 @@ topdown:
 num_class: 14
 
 # Whether to use Bayesian classifier
-bayesian: True
+bayesian: False
 
 # Number of samples used for Monte-Carlo inference
 mc_samples: 40
