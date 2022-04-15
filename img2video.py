@@ -12,16 +12,16 @@ import cv2
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Image sequence to video translation')
-    parser.add_argument('--input-dir', type=str, default='logs/eval_map_v2_save_22-03-29--14-32-21/gt', 
+    parser.add_argument('--input-dir', type=str, default='logs/eval_hdmapnet_v2_22-04-14--20-53-32/pred', 
                         help='Directory to sequence of images')
     parser.add_argument('--output-dir', type=str, default=None,
                         help='Directory where output video is saved. default: same as input-dir')
     parser.add_argument('--img-glob', type=str, default='*.png',
                         help='Image extension. default: png')
-    parser.add_argument('--fps', type=int, default='30',
+    parser.add_argument('--fps', type=int, default='10',
                         help='FPS of output video. default: 30fps')
-    parser.add_argument('--w', type=int, default=200)
-    parser.add_argument('--h', type=int, default=196)
+    parser.add_argument('--w', type=int, default=200) # 800 200
+    parser.add_argument('--h', type=int, default=196) # 600 196
     args = parser.parse_args()
     if args.output_dir == None:
         args.output_dir = args.input_dir
