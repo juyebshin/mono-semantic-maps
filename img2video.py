@@ -12,7 +12,7 @@ import cv2
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Image sequence to video translation')
-    parser.add_argument('--input-dir', type=str, default='logs/eval_map_v2_save_22-03-29--14-32-21/gt', 
+    parser.add_argument('--input-dir', type=str, default='logs/eval_hdmapnet_v2_mask_22-04-14--21-35-59/gt', 
                         help='Directory to sequence of images')
     parser.add_argument('--output-dir', type=str, default=None,
                         help='Directory where output video is saved. default: same as input-dir')
