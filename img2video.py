@@ -89,5 +89,8 @@ if __name__ == '__main__':
 
         idx = idx + 1
     
-    out.release()
-    print('video saved as: {}'.format(outname))
+    if out.isOpened():
+        out.release()
+        print('video saved as: {}'.format(outname))
+    else:
+        print('Failed to save video')
