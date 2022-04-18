@@ -69,7 +69,7 @@ def evaluate(dataloader, model, criterion, summary, config):
 
     # Print and record results
     display_results(confusion, config.train_dataset)
-    log_results(confusion, config.train_dataset, summary, 'val', i*config.batch_size)
+    log_results(confusion, config.train_dataset, summary, 'val', 0)
 
     return confusion.mean_iou
 
